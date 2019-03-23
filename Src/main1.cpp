@@ -19,9 +19,6 @@ CAN_HandleTypeDef hcan;
 #define CAN_MTU 8
 TIM_HandleTypeDef htim2;
 uint16_t now_pattern = 0b00000000;
-uint8_t once = 0;
-uint8_t order;
-uint8_t endis = 0;
 
 template<typename T>
 static void can_unpack(const uint8_t (&buf)[CAN_MTU], T &data);
@@ -36,20 +33,10 @@ static void MX_TIM2_Init(void);
 
 static SolenoidNode * const solenoidNode = new SolenoidNode();
 
-int Counter_1 = 0;
-int Counter_2 = 0;
-
 CAN_RxHeaderTypeDef rx_msg;
-CAN_TxHeaderTypeDef tx_msg8;
-CAN_TxHeaderTypeDef tx_msg9;
 
 uint32_t status;
-uint8_t tx_payload8[CAN_MTU];
-uint8_t tx_payload9[CAN_MTU];
-uint8_t timetosend = 0;
-//static constexpr uint16_t id_handStatus = 0x101;
-//static constexpr uint16_t id_handCmd = 0x102;
-
+uint16_t order;
 uint8_t cmd[CAN_MTU]; //受信データ格納用
 
 int main1(void) {
@@ -80,44 +67,24 @@ int main1(void) {
 
 	can_enable();
 
-	tx_msg8.StdId = 0x100;
-	tx_msg8.RTR = CAN_RTR_DATA;
-	tx_msg8.IDE = CAN_ID_STD;
-	tx_msg8.DLC = 1;
-	tx_msg9.StdId = 0x101;
-	tx_msg9.RTR = CAN_RTR_DATA;
-	tx_msg9.IDE = CAN_ID_STD;
-	tx_msg9.DLC = 1;
-
 	HAL_NVIC_EnableIRQ (TIM2_IRQn);
 	HAL_TIM_Base_Start_IT(&htim2);
 
+	solenoid_drive(0x00);
+
 	while (1) {
-		now_pattern = 0b00000000;
-		solenoid_drive(now_pattern);
 		status = can_rx(&rx_msg, cmd);
 		if (status == HAL_OK) {
-			// received can frame
-			if (rx_msg.StdId == id_handCmd) {
+			if (rx_msg.StdId == 0x301) {
 				can_unpack(cmd, order);
-				switch (order) {
-				case 0x00: //disable
-					//solenoid_disable();
-					//solenoid_drive(0b00000000);
-					endis = 0;
-					once = 0;
-					break;
-				case 0x01: //enable
-					//solenoid_enable();
-					endis = 1;
-					break;
-				}
-
+				solenoid_drive(order);
 			}
-		}
 
+		}
 	}
+
 }
+
 extern "C" void TIM2_IRQHandler(void) //送信レート100
 		{
 	if (TIM2->SR & TIM_SR_UIF) {
